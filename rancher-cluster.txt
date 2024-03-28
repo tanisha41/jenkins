@@ -1,0 +1,84 @@
+Step 1:  Execute below command in all 3 Rancher Master Nodes.
+
+	curl -sfL https://get.rke2.io | INSTALL_RKE2_CHANNEL=v1.24.7+rke2r1 sh -
+Note: v1.24.7+rke2r1 is the version of RKE2 to be installed.
+
+Step 2:  Execute below command in all 3 Rancher Master Nodes.
+
+cat <<'EOF' | sudo tee /etc/default/rke2-server > /dev/null
+HTTP_PROXY=http://10.199.11.11:8080
+HTTPS_PROXY=http://10.199.11.11:8080
+NO_PROXY=${lan%,},${service%,},${pool%,},kubernetes.default.svc,10.96.0.1,10.43.0.1,127.0.0.1,10.199.14.222,10.250.44.53,10.250.24.201,10.250.44.31,10.250.44.42,registry.gitlab.federalbank.co.in,10.250.24.178,10.250.24.179,10.250.24.180,10.250.24.236,uatrancher.kubes.federalbank.co.in,10.250.44.30,10.250.44.26,fbuatk8s.kubes.federalbank.co.ini,nexusuat.kubes.federalbank.co.in,gitlabuat.kubes.federalbank.co.in,nexuspre.kubes.federalbank.co.in,10.199.34.12,,localhost,10.43.60.18,dsscuat.kubes.federalbank.co.in,dsscuat.kubes.federalbank.co.in,10.199.14.222,uatgateway.federalbank.co.in,127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,sitrancher.kubes.federalbank.co.in
+EOF
+
+Step 3: Add host entries of all 3 Rancher Master Nodes in all these servers
+
+Example: cat /etc/hosts       (server: sitranchermaster1.kubes.federalbank.co.in)
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+10.250.44.86    satranch1A11001.workgroup satranch1A11001 sitranchermaster1.kubes.federalbank.co.in
+10.250.44.87  sitranchermaster2.kubes.federalbank.co.in
+10.250.44.88  sitranchermaster3.kubes.federalbank.co.in
+
+
+Step 4: Launch rke2 only on sitranchermaster1. Below command can be used to launch rke2.
+			systemctl enable rke2-server.service
+			systemctl start rke2-server.service
+  Note: This will create a token in "/var/lib/rancher/rke2/server/node-token". We need to use this token for further steps.
+
+Step 5: Create a config.yaml file in path "/etc/rancher/rke2/config.yaml" of master 1 and paste below contents
+
+token: <node-token-from-step4>
+tls-san:
+  - sitk8sranchermaster1.kubes.federalbank.co.in
+  - sitk8sranchermaster2.kubes.federalbank.co.in
+  - sitk8sranchermaster3.kubes.federalbank.co.in
+
+
+Step 6: Create a config.yaml file in path "/etc/rancher/rke2/config.yaml" of master 2 & master 3 and paste below contents
+
+server: https://sitk8sranchermaster1.kubes.federalbank.co.in:9345
+token: <node-token-from-step4>
+tls-san:
+  - sitk8sranchermaster1.kubes.federalbank.co.in
+  - sitk8sranchermaster2.kubes.federalbank.co.in
+  - sitk8sranchermaster3.kubes.federalbank.co.in
+
+Step 7: Enable and Start rke2-server in the other two master nodes (master 2 & master 3)
+			systemctl enable rke2-server.service
+			systemctl start rke2-server.service
+			
+Step 8: Add below lines in ~/.bash_profile
+
+export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+export CRI_CONFIG_FILE=/var/lib/rancher/rke2/agent/etc/crictl.yaml
+
+Step 9: Execute below command.
+
+			source ~/.bash_profile
+
+-----------------------------------------------------------------------------------------------------------------------			
+Kubernetes cluster is now installed. try command "kubectl get nodes" to see the list of nodes.
+-----------------------------------------------------------------------------------------------------------------------
+
+
+Step 10: Download required helm version from https://github.com/helm/helm/releases?page=1 and upload it to the master1 server.
+
+Step 11: Extract the helm package and place helm in path /usr/local/bin. Once this is done, check the installation status by below command.
+				helm version
+				
+Step 12: Add helm repo of rancher from below command.
+
+				helm repo add rancher-stable https://releases.rancher.com/server-charts/stable
+				
+Step 13: Create namespace cattle-system using below command.
+
+				kubectl create namespace cattle-system
+
+Step 14: Create secrets tls-rancher-ingress and tls-ca in namespace cattle-system. (tls-rancher-ingress is the tls certificate, and tls-ca is the cacert.pem file)
+
+Step 14: Install rancher with below command. Note the version.
+
+helm upgrade --install rancher rancher-stable/rancher --version <version> --namespace cattle-system --set hostname="sitrancher.kubes.federalbank.co.in" --set proxy="http://10.199.11.11:8080" --set bootstrapPassword="admin" --set ingress.tls.source="tls-rancher-ingress" --set privateCA=true --set global.cattle.psp.enabled=false --set noProxy="127.0.0.0/8\\,10.0.0.0/8\\,cattle-system.svc\\,172.16.0.0/12\\,192.168.0.0/16\\,.svc\\,.cluster.local\\,kubernetes.default.svc\\,10.96.0.1\\,10.43.0.1\\,10.199.14.222\\,10.250.44.53\\,10.250.24.201\\,10.250.44.31\\,10.250.44.42\\,registry.gitlab.federalbank.co.in\\,10.250.24.178\\,10.250.24.179\\,10.250.24.180\\,10.250.24.236\\,10.250.44.30\\,10.250.44.26\\,fbuatk8s.kubes.federalbank.co.in\\,nexusuat.kubes.federalbank.co.in\\,gitlabuat.kubes.federalbank.co.in\\,nexuspre.kubes.federalbank.co.in\\,10.199.34.12\\,localhost\\,10.43.60.18\\,dsscuat.kubes.federalbank.co.in\\,dsscuat.kubes.federalbank.co.in\\,10.199.14.222\\,uatgateway.federalbank.co.in\\,172.16.0.0/12\\,192.168.0.0/16\\,*.kubes.federalbank.co.in"
+
+	Note:- If the image doesn't pull by itself, download the image rancher/rancher:<version> and load it into the server manually
